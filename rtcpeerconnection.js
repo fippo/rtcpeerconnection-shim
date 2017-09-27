@@ -617,11 +617,15 @@ module.exports = function(window, edgeVersion) {
     var params = getCommonCapabilities(transceiver.localCapabilities,
         transceiver.remoteCapabilities);
     if (send && transceiver.rtpSender) {
-      params.encodings = transceiver.sendEncodingParameters;
+      if (transceiver.sendEncodingParameters.length) {
+        params.encodings = transceiver.sendEncodingParameters;
+      }
       params.rtcp = {
-        cname: SDPUtils.localCName,
         compound: transceiver.rtcpParameters.compound
       };
+      if (SDPUtils.localCName) {
+        params.rtcp.cname = SDPUtils.localCName;
+      }
       if (transceiver.recvEncodingParameters.length) {
         params.rtcp.ssrc = transceiver.recvEncodingParameters[0].ssrc;
       }
@@ -636,11 +640,15 @@ module.exports = function(window, edgeVersion) {
           delete p.rtx;
         });
       }
-      params.encodings = transceiver.recvEncodingParameters;
+      if (transceiver.recvEncodingParameters.length) {
+        params.encodings = transceiver.recvEncodingParameters;
+      }
       params.rtcp = {
-        cname: transceiver.rtcpParameters.cname,
         compound: transceiver.rtcpParameters.compound
       };
+      if (transceiver.rtcpParameters.cname) {
+        params.rtcp.cname = transceiver.rtcpParameters.cname;
+      }
       if (transceiver.sendEncodingParameters.length) {
         params.rtcp.ssrc = transceiver.sendEncodingParameters[0].ssrc;
       }
