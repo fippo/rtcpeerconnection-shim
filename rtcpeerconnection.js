@@ -617,15 +617,11 @@ module.exports = function(window, edgeVersion) {
     var params = getCommonCapabilities(transceiver.localCapabilities,
         transceiver.remoteCapabilities);
     if (send && transceiver.rtpSender) {
-      if (transceiver.sendEncodingParameters.length) {
-        params.encodings = transceiver.sendEncodingParameters;
-      }
+      params.encodings = transceiver.sendEncodingParameters;
       params.rtcp = {
+        cname: SDPUtils.localCName,
         compound: transceiver.rtcpParameters.compound
       };
-      if (SDPUtils.localCName) {
-        params.rtcp.cname = SDPUtils.localCName;
-      }
       if (transceiver.recvEncodingParameters.length) {
         params.rtcp.ssrc = transceiver.recvEncodingParameters[0].ssrc;
       }
