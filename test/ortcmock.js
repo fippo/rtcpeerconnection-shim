@@ -85,6 +85,13 @@ module.exports = function(window) {
   const RTCIceTransport = function() {
     this._remoteCandidates = [];
     this.state = 'new';
+
+    this._emitter = new EventEmitter();
+    this.addEventListener = this._emitter.addListener.bind(this);
+    this.removeEventListener = this._emitter.removeListener.bind(this);
+    this.dispatchEvent = (ev) => {
+      this._emitter.emit(ev.type, ev);
+    };
   };
   RTCIceTransport.prototype.start = function(gatherer, parameters, role) {
     this._gatherer = gatherer;
@@ -120,6 +127,13 @@ module.exports = function(window) {
   const RTCDtlsTransport = function(transport) {
     this.transport = transport;
     this.state = 'new';
+
+    this._emitter = new EventEmitter();
+    this.addEventListener = this._emitter.addListener.bind(this);
+    this.removeEventListener = this._emitter.removeListener.bind(this);
+    this.dispatchEvent = (ev) => {
+      this._emitter.emit(ev.type, ev);
+    };
   };
   RTCDtlsTransport.prototype.start = function() {
     this.state = 'connected'; // TODO: not accurate.
