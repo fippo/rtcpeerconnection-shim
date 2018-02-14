@@ -658,13 +658,22 @@ module.exports = function(window, edgeVersion) {
   RTCPeerConnection.prototype._createIceAndDtlsTransports = function() {
     var pc = this;
     var iceTransport = new window.RTCIceTransport(null);
-    iceTransport.onicestatechange = function() {
+    iceTransport.onicestatechange = function(e) {
       pc._updateConnectionState();
+
+      if (!('onstatechange' in window.RTCIceTransport.prototype)) {
+        e.name = 'onstatechange';
+        this.dispatchEvent(e);
+      }
     };
 
     var dtlsTransport = new window.RTCDtlsTransport(iceTransport);
-    dtlsTransport.ondtlsstatechange = function() {
+    dtlsTransport.ondtlsstatechange = function(e) {
       pc._updateConnectionState();
+      if (!('onstatechange' in window.RTCDtlsTransport.prototype)) {
+        e.name = 'onstatechange';
+        this.dispatchEvent(e);
+      }
     };
     dtlsTransport.onerror = function() {
       // onerror does not set state to failed by itself.

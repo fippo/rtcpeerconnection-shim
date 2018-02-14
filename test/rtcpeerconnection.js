@@ -3523,7 +3523,8 @@ describe('Edge shim', () => {
       pc.oniceconnectionstatechange = stub;
       pc.addEventListener('iceconnectionstatechange', stub);
 
-      iceTransport.onicestatechange();
+      const event = new Event('statechange');
+      iceTransport.onicestatechange(event);
       expect(stub).not.to.have.been.calledWith();
     });
 
@@ -3538,7 +3539,8 @@ describe('Edge shim', () => {
       const stub = sinon.stub();
       pc.oniceconnectionstatechange = stub;
 
-      dtlsTransport.ondtlsstatechange();
+      const event = new Event('statechange');
+      dtlsTransport.ondtlsstatechange(event);
 
       expect(stub).to.have.been.calledOnce();
       expect(pc.iceConnectionState).to.equal('connected');
@@ -3571,7 +3573,8 @@ describe('Edge shim', () => {
       const stub = sinon.stub();
       pc.oniceconnectionstatechange = stub;
 
-      iceTransport.onicestatechange();
+      const event = new Event('statechange');
+      iceTransport.onicestatechange(event);
 
       expect(stub).to.have.been.calledOnce();
       expect(pc.iceConnectionState).to.equal('disconnected');
