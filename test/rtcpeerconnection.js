@@ -1277,6 +1277,17 @@ describe('Edge shim', () => {
         });
       });
     });
+
+    it('creates an RTCRtpTransceiver for a rejected m-lines', (done) => {
+      const sdp = SDP_BOILERPLATE +
+          MINIMAL_AUDIO_MLINE.replace('m=audio 9', 'm=audio 0');
+      pc.setRemoteDescription({type: 'offer', sdp})
+      .then(() => {
+        const transceivers = pc.getTransceivers();
+        expect(transceivers).to.have.length(1);
+        done();
+      });
+    });
   });
 
   describe('createOffer', () => {
@@ -1764,6 +1775,35 @@ describe('Edge shim', () => {
             expect(sections.length).to.equal(1);
             const msid = SDPUtils.parseMsid(sections[0]);
             expect(msid.stream).to.equal('-');
+          });
+        });
+      });
+    });
+
+    describe('when called after addTransceiver', () => {
+      // I have questions... https://github.com/w3c/webrtc-pc/issues/1662
+      describe('with kind', () => {
+        it('the generated SDP should contain an m-line', (done) => {
+          pc.addTransceiver('audio');
+          pc.createOffer()
+          .then((offer) => {
+            const sections = SDPUtils.splitSections(offer.sdp);
+            expect(sections.length).to.equal(2);
+            expect(SDPUtils.getKind(sections[1])).to.equal('audio');
+            done();
+          });
+        });
+
+        it('the generated SDP should contain a msid line with ' +
+           'the no-stream "-" stream', (done) => {
+          pc.addTransceiver('audio');
+          pc.createOffer()
+          .then((offer) => {
+            const sections = SDPUtils.splitSections(offer.sdp);
+            // look for a=msid:- randomtrackid
+            expect(SDPUtils.matchPrefix(sections[1], 'a=msid:- '))
+                .to.have.length(1);
+            done();
           });
         });
       });
@@ -3446,6 +3486,54 @@ describe('Edge shim', () => {
           pc.close();
           const afterClose = () => {
             pc.addTrack(stream.getTracks()[0], stream);
+          };
+          expect(afterClose).to.throw(/closed/)
+            .that.has.property('name').that.equals('InvalidStateError');
+        });
+      });
+    });
+  });
+
+  describe('addTransceiver', () => {
+    let pc;
+    beforeEach(() => {
+      pc = new RTCPeerConnection();
+    });
+    afterEach(() => {
+      pc.close();
+    });
+
+    describe('returns a transceiver with sender and receiver ' +
+        'when called with', () => {
+      it('with kind', () => {
+        const transceiver = pc.addTransceiver('audio');
+        expect(transceiver).to.be.an.instanceOf(window.RTCRtpTransceiver);
+        expect(transceiver.sender).to.be.an.instanceOf(window.RTCRtpSender);
+        expect(transceiver.receiver).to.be.an.
+            instanceOf(window.RTCRtpReceiver);
+      });
+
+      it('with a track', () => {
+        return navigator.mediaDevices.getUserMedia({audio: true})
+        .then((stream) => {
+          const transceiver = pc.addTransceiver(stream.getTracks()[0], {
+            streams: [stream]
+          });
+          expect(transceiver).to.be.an.instanceOf(window.RTCRtpTransceiver);
+          expect(transceiver.sender).to.be.an.instanceOf(window.RTCRtpSender);
+          expect(transceiver.receiver).to.be.an.
+              instanceOf(window.RTCRtpReceiver);
+        });
+      });
+    });
+
+    describe('throws an exception', () => {
+      it('if the peerconnection has been closed already', () => {
+        return navigator.mediaDevices.getUserMedia({audio: true})
+        .then((stream) => {
+          pc.close();
+          const afterClose = () => {
+            pc.addTransceiver(stream.getTracks()[0], {streams: [stream]});
           };
           expect(afterClose).to.throw(/closed/)
             .that.has.property('name').that.equals('InvalidStateError');
