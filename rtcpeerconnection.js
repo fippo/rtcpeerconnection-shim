@@ -1241,10 +1241,7 @@ module.exports = function(window, edgeVersion) {
 
     var sdp = SDPUtils.writeSessionBoilerplate(pc._sdpSessionId,
       pc._sdpSessionVersion++);
-    pc._transceivers.forEach(function(transceiver, sdpMLineIndex) {
-      if (transceiver.rejected) {
-        return;
-      }
+    pc._transceivers.forEach(function(transceiver) {
       // For each track, create an ice gatherer, ice transport,
       // dtls transport, potentially rtpsender and rtpreceiver.
       var track = transceiver.track;
@@ -1261,6 +1258,10 @@ module.exports = function(window, edgeVersion) {
       if (!transceiver.iceGatherer) {
         transceiver.iceGatherer = pc._createIceGatherer(transceiver,
           pc._usingBundle);
+      }
+
+      if (transceiver.rejected) {
+        return;
       }
 
       var localCapabilities = window.RTCRtpSender.getCapabilities(kind);
@@ -1304,7 +1305,7 @@ module.exports = function(window, edgeVersion) {
 
       // generate an ssrc now, to be used later in rtpSender.send
       var sendEncodingParameters = transceiver.sendEncodingParameters || [{
-        ssrc: (2 * sdpMLineIndex + 1) * 1001
+        ssrc: (2 * transceiver.sdpMLineIndex + 1) * 1001
       }];
       if (track) {
         // add RTX
@@ -1334,7 +1335,7 @@ module.exports = function(window, edgeVersion) {
     sdp += 'a=ice-options:trickle\r\n';
 
     var mediaSections = [];
-    pc._transceivers.forEach(function(transceiver, sdpMLineIndex) {
+    pc._transceivers.forEach(function(transceiver) {
       var mediaSection = '';
       if (transceiver.rejected) {
         mediaSection = writeRejectedMediaSection(transceiver);
@@ -1345,7 +1346,7 @@ module.exports = function(window, edgeVersion) {
         mediaSection += 'a=rtcp-rsize\r\n';
 
         if (transceiver.iceGatherer && pc._iceGatheringState !== 'new' &&
-            (sdpMLineIndex === 0 || !pc._usingBundle)) {
+            (transceiver.sdpMLineIndex === 0 || !pc._usingBundle)) {
           transceiver.iceGatherer.getLocalCandidates().forEach(function(cand) {
             cand.component = 1;
             mediaSection += 'a=' + SDPUtils.writeCandidate(cand) + '\r\n';
