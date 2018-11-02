@@ -666,9 +666,7 @@ module.exports = function(window, edgeVersion) {
         transceiver.localCapabilities = caps;
       });
 
-      pc._transceivers.forEach(function(transceiver) {
-        pc._gather(transceiver);
-      });
+      pc._transceivers.forEach(pc._gather, pc);
     } else if (description.type === 'answer') {
       sections = SDPUtils.splitSections(pc._remoteDescription.sdp);
       sessionpart = sections.shift();
