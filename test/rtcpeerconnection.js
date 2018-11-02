@@ -3848,7 +3848,7 @@ describe('Edge shim', () => {
     let pc1;
     let pc2;
     beforeEach(() => {
-      var iceServers = [{urls: 'stun:stun.l.google.com:19302'}]
+      var iceServers = [{urls: 'stun:stun.l.google.com:19302'}];
       pc1 = new RTCPeerConnection({iceServers: iceServers});
       pc2 = new RTCPeerConnection({iceServers: iceServers});
       pc1.addEventListener('icecandidate',
