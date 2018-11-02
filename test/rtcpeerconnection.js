@@ -3843,4 +3843,48 @@ describe('Edge shim', () => {
         });
     });
   });
+
+  describe('Issue #169', () => {
+    let pc1;
+    let pc2;
+    beforeEach(() => {
+      var iceServers = [{urls: 'stun:stun.l.google.com:19302'}]
+      pc1 = new RTCPeerConnection({iceServers: iceServers});
+      pc2 = new RTCPeerConnection({iceServers: iceServers});
+      pc1.addEventListener('icecandidate',
+        e => pc2.addIceCandidate(e.candidate));
+      pc2.addEventListener('icecandidate',
+        e => pc1.addIceCandidate(e.candidate));
+    });
+    afterEach(() => {
+      pc1.close();
+      pc2.close();
+    });
+    it('is fixed', () => {
+      return navigator.mediaDevices.getUserMedia({audio: true})
+        .then((stream) => {
+          pc1.addTrack(stream.getTracks()[0], stream);
+          return navigator.mediaDevices.getUserMedia({audio: true});
+        })
+        .then((stream) => {
+          pc2.addTrack(stream.getTracks()[0], stream);
+          return pc1.createOffer();
+        })
+        .then((offer) => pc1.setLocalDescription(offer)
+          .then(() => pc2.setRemoteDescription(offer)))
+        .then(() => pc2.createAnswer())
+        .then((answer) => pc2.setLocalDescription(answer)
+          .then(() => pc1.setRemoteDescription(answer)))
+        .then(() => navigator.mediaDevices.getUserMedia({audio: true}))
+        .then((stream) => {
+          pc2.addTrack(stream.getTracks()[0], stream);
+          return pc2.createOffer();
+        })
+        .then((offer) => pc2.setLocalDescription(offer)
+          .then(() => pc1.setRemoteDescription(offer)))
+        .then(() => pc1.createAnswer())
+        .then((answer) => pc1.setLocalDescription(answer)
+          .then(() => pc2.setRemoteDescription(answer)));
+    });
+  });
 });

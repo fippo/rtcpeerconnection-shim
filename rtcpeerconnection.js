@@ -695,12 +695,16 @@ module.exports = function(window, edgeVersion) {
 
           if (!pc._usingBundle || sdpMLineIndex === 0) {
             pc._gather(transceiver.mid, sdpMLineIndex);
-            if (iceTransport.state === 'new') {
+            if (iceTransport.state === 'new'
+              && !!iceTransport.isStarted === false) {
               iceTransport.start(iceGatherer, remoteIceParameters,
                 isIceLite ? 'controlling' : 'controlled');
+              iceTransport.isStarted = true;
             }
-            if (dtlsTransport.state === 'new') {
+            if (dtlsTransport.state === 'new'
+              && !!dtlsTransport.isStarted === false) {
               dtlsTransport.start(remoteDtlsParameters);
+              dtlsTransport.isStarted = true;
             }
           }
 
@@ -1022,12 +1026,16 @@ module.exports = function(window, edgeVersion) {
         }
 
         if (!usingBundle || sdpMLineIndex === 0) {
-          if (iceTransport.state === 'new') {
+          if (iceTransport.state === 'new'
+            && !!iceTransport.isStarted === false) {
             iceTransport.start(iceGatherer, remoteIceParameters,
               'controlling');
+            iceTransport.isStarted = true;
           }
-          if (dtlsTransport.state === 'new') {
+          if (dtlsTransport.state === 'new'
+            && !!dtlsTransport.isStarted === false) {
             dtlsTransport.start(remoteDtlsParameters);
+            dtlsTransport.isStarted = true;
           }
         }
         if (transceiver.rtpSender && !transceiver.rtpSender.transport) {
