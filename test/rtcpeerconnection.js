@@ -3884,4 +3884,91 @@ describe('Edge shim', () => {
         });
     });
   });
+
+  describe('Partial rollback,', () => {
+    describe('RTCPeerConnections 1 and 2 call createOffer, ' +
+      'and RTCPeerConnection 1 calls setLocalDescription; then',() => {
+      let pc1;
+      let pc2;
+      beforeEach(() => {
+        pc1 = new RTCPeerConnection();
+        pc2 = new RTCPeerConnection();
+        pc1.addEventListener('icecandidate',
+          e => pc2.addIceCandidate(e.candidate));
+        pc2.addEventListener('icecandidate',
+          e => pc1.addIceCandidate(e.candidate));
+        return navigator.mediaDevices.getUserMedia({audio: true})
+          .then((stream) => {
+            pc1.addTrack(stream.getTracks()[0], stream);
+            return navigator.mediaDevices.getUserMedia({audio: true});
+          })
+          .then((stream) => {
+            pc2.addTrack(stream.getTracks()[0], stream);
+            return pc1.createOffer();
+          })
+          .then((offer) => pc1.setLocalDescription(offer)
+            .then(() => pc2.setRemoteDescription(offer)))
+          .then(() => pc2.createAnswer())
+          .then((answer) => pc2.setLocalDescription(answer)
+            .then(() => pc1.setRemoteDescription(answer)))
+          .then(() => {
+            expect((pc1.localDescription.sdp.match(/m=audio/g)
+              || []).length).equal(1);
+            expect((pc2.localDescription.sdp.match(/m=audio/g)
+              || []).length).equal(1);
+          })
+          .then(() => navigator.mediaDevices.getUserMedia({video: true}))
+          .then((stream) => {
+            pc1.addTrack(stream.getTracks()[0], stream);
+            return pc1.createOffer();
+          })
+          .then((offer) => {
+            pc1.setLocalDescription(offer);
+            expect((pc1.localDescription.sdp.match(/m=audio/g)
+              || []).length).equal(1);
+            expect((pc1.localDescription.sdp.match(/m=video/g)
+              || []).length).equal(1);
+          });
+      });
+      describe('RTCPeerConnection 1 rolls back and ' +
+        'calls setRemoteDescription; then', () => {
+        beforeEach(() => {
+          return navigator.mediaDevices.getUserMedia({audio: true})
+            .then((stream) => {
+              pc2.addTrack(stream.getTracks()[0], stream);
+              return pc2.createOffer();
+            })
+            .then((offer) => pc2.setLocalDescription(offer)
+              .then(() => pc1.setLocalDescription({type: 'rollback'})
+                .then(() => pc1.setRemoteDescription(offer))));
+        });
+        describe('RTCPeerConnection 1 calls createAnswer ' +
+          'and setLocalDescription; then', () => {
+          beforeEach(() => {
+            return pc1.createAnswer()
+              .then((answer) => pc1.setLocalDescription(answer)
+                .then(() => pc2.setRemoteDescription(answer)));
+          });
+          it('RTCPeerConnection 1 calls createOffer and negotiate', () => {
+            return pc1.createOffer()
+              .then((offer) => pc1.setLocalDescription(offer)
+                .then(() => pc2.setRemoteDescription(offer)))
+              .then(() => pc2.createAnswer())
+              .then((answer) => pc2.setLocalDescription(answer)
+                .then(() => pc1.setRemoteDescription(answer)))
+              .then(() => {
+                expect((pc1.localDescription.sdp.match(/m=audio/g)
+                  || []).length).equal(2);
+                expect((pc1.localDescription.sdp.match(/m=video/g)
+                  || []).length).equal(1);
+                expect((pc2.localDescription.sdp.match(/m=audio/g)
+                  || []).length).equal(2);
+                expect((pc2.localDescription.sdp.match(/m=video/g)
+                  || []).length).equal(1);
+              });
+          });
+        });
+      });
+    });
+  });
 });

@@ -167,6 +167,9 @@ module.exports = {
       answer: {
         setLocalDescription: ['have-remote-offer', 'have-local-pranswer'],
         setRemoteDescription: ['have-local-offer', 'have-remote-pranswer']
+      },
+      rollback: {
+        setLocalDescription: ['have-local-offer']
       }
     }[type][action].indexOf(signalingState) !== -1;
   },

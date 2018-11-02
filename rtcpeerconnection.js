@@ -46,6 +46,7 @@ module.exports = function(window, edgeVersion) {
 
     this._canTrickleIceCandidates = null;
     this._localDescription = null;
+    this._previousLocalDescription = null;
     this._remoteDescription = null;
     this._signalingState = 'stable';
     this._iceConnectionState = 'new';
@@ -55,6 +56,7 @@ module.exports = function(window, edgeVersion) {
     // per-track iceGathers, iceTransports, dtlsTransports, rtpSenders, ...
     // everything that is needed to describe a SDP m-line.
     this._transceivers = [];
+    this._negotiationNeededTracks = [];
 
     this._sdpSessionId = SDPUtils.generateSessionId();
     this._sdpSessionVersion = 0;
@@ -144,6 +146,7 @@ module.exports = function(window, edgeVersion) {
       iceGatherer: null,
       iceTransport: null,
       dtlsTransport: null,
+      previousLocalCapabilities: null,
       localCapabilities: null,
       remoteCapabilities: null,
       rtpSender: null,
@@ -541,6 +544,9 @@ module.exports = function(window, edgeVersion) {
     transceiver.track = track;
     transceiver.stream = stream;
     transceiver.rtpSender = new window.RTCRtpSender(track);
+
+    this._negotiationNeededTracks.push(track);
+
     return transceiver.rtpSender;
   };
 
@@ -639,7 +645,7 @@ module.exports = function(window, edgeVersion) {
     var pc = this;
 
     // Note: pranswer is not supported.
-    if (['offer', 'answer'].indexOf(description.type) === -1) {
+    if (['offer', 'answer', 'rollback'].indexOf(description.type) === -1) {
       return Promise.reject(util.makeError('TypeError',
         'Unsupported type "' + description.type + '"'));
     }
@@ -653,79 +659,98 @@ module.exports = function(window, edgeVersion) {
 
     var sections;
     var sessionpart;
-    if (description.type === 'offer') {
-      // VERY limited support for SDP munging. Limited to:
-      // * changing the order of codecs
-      sections = SDPUtils.splitSections(description.sdp);
-      sessionpart = sections.shift();
-      sections.forEach(function(mediaSection, sdpMLineIndex) {
-        var caps = SDPUtils.parseRtpParameters(mediaSection);
-        var transceiver = pc._transceivers.find(function(t) {
-          return t.mid === SDPUtils.getMid(mediaSection);
-        });
-        transceiver.localCapabilities = caps;
-      });
 
-      pc._transceivers.forEach(pc._gather, pc);
-    } else if (description.type === 'answer') {
-      sections = SDPUtils.splitSections(pc._remoteDescription.sdp);
-      sessionpart = sections.shift();
-      var isIceLite = SDPUtils.matchPrefix(sessionpart,
-        'a=ice-lite').length > 0;
-      sections.forEach(function(mediaSection, sdpMLineIndex) {
-        var transceiver = pc._transceivers.find(function(t) {
-          return t.mid === SDPUtils.getMid(mediaSection);
-        });
-        var iceGatherer = transceiver.iceGatherer;
-        var iceTransport = transceiver.iceTransport;
-        var dtlsTransport = transceiver.dtlsTransport;
-        var localCapabilities = transceiver.localCapabilities;
-        var remoteCapabilities = transceiver.remoteCapabilities;
-
-        // treat bundle-only as not-rejected.
-        var rejected = SDPUtils.isRejected(mediaSection) &&
-            SDPUtils.matchPrefix(mediaSection, 'a=bundle-only').length === 0;
-
-        if (!rejected && !transceiver.rejected) {
-          if (transceiver.rtpSender && !transceiver.rtpSender.transport) {
-            transceiver.rtpSender.setTransport(transceiver.dtlsTransport);
-          }
-          var remoteIceParameters = SDPUtils.getIceParameters(
-            mediaSection, sessionpart);
-          var remoteDtlsParameters = SDPUtils.getDtlsParameters(
-            mediaSection, sessionpart);
-          if (isIceLite) {
-            remoteDtlsParameters.role = 'server';
-          }
-
-          if (!pc._usingBundle || sdpMLineIndex === 0) {
-            pc._gather(transceiver);
-            if (iceTransport.state === 'new') {
-              iceTransport.start(iceGatherer, remoteIceParameters,
-                isIceLite ? 'controlling' : 'controlled');
-            }
-            if (dtlsTransport.state === 'new') {
-              dtlsTransport.start(remoteDtlsParameters);
-            }
-          }
-
-          // Calculate intersection of capabilities.
-          var params = getCommonCapabilities(localCapabilities,
-            remoteCapabilities);
-
-          // Start the RTCRtpSender. The RTCRtpReceiver for this
-          // transceiver has already been started in setRemoteDescription.
-          pc._transceive(transceiver,
-            params.codecs.length > 0,
-            false);
+    if (description.type === 'rollback') {
+      pc._localDescription = pc._previousLocalDescription;
+      pc._previousLocalDescription = null;
+      pc._transceivers.forEach(function(transceiver) {
+        transceiver.localCapabilities = transceiver.previousLocalCapabilities;
+        transceiver.previousLocalCapabilities = null;
+        if (!pc._localDescription) {
+          transceiver.iceGatherer.onlocalcandidate = null;
+        }
+        if (pc._negotiationNeededTracks.includes(transceiver.track)
+          && !transceiver.remoteCapabilities) {
+          transceiver.mid = null;
+          delete transceiver.sdpMLineIndex;
+          transceiver.sendEncodingParameters = null;
         }
       });
-    }
+    } else {
+      if (description.type === 'offer') {
+        // VERY limited support for SDP munging. Limited to:
+        // * changing the order of codecs
+        sections = SDPUtils.splitSections(description.sdp);
+        sessionpart = sections.shift();
+        sections.forEach(function(mediaSection, sdpMLineIndex) {
+          var caps = SDPUtils.parseRtpParameters(mediaSection);
+          var transceiver = pc._transceivers.find(function(t) {
+            return t.mid === SDPUtils.getMid(mediaSection);
+          });
+          transceiver.localCapabilities = caps;
+        });
 
-    pc._localDescription = {
-      type: description.type,
-      sdp: description.sdp
-    };
+        pc._transceivers.forEach(pc._gather, pc);
+      } else if (description.type === 'answer') {
+        sections = SDPUtils.splitSections(pc._remoteDescription.sdp);
+        sessionpart = sections.shift();
+        var isIceLite = SDPUtils.matchPrefix(sessionpart,
+          'a=ice-lite').length > 0;
+        sections.forEach(function(mediaSection, sdpMLineIndex) {
+          var transceiver = pc._transceivers.find(function(t) {
+            return t.mid === SDPUtils.getMid(mediaSection);
+          });
+          var iceGatherer = transceiver.iceGatherer;
+          var iceTransport = transceiver.iceTransport;
+          var dtlsTransport = transceiver.dtlsTransport;
+          var localCapabilities = transceiver.localCapabilities;
+          var remoteCapabilities = transceiver.remoteCapabilities;
+
+          // treat bundle-only as not-rejected.
+          var rejected = SDPUtils.isRejected(mediaSection) &&
+            SDPUtils.matchPrefix(mediaSection, 'a=bundle-only').length === 0;
+
+          if (!rejected && !transceiver.rejected) {
+            if (transceiver.rtpSender && !transceiver.rtpSender.transport) {
+              transceiver.rtpSender.setTransport(transceiver.dtlsTransport);
+            }
+            var remoteIceParameters = SDPUtils.getIceParameters(
+              mediaSection, sessionpart);
+            var remoteDtlsParameters = SDPUtils.getDtlsParameters(
+              mediaSection, sessionpart);
+            if (isIceLite) {
+              remoteDtlsParameters.role = 'server';
+            }
+
+            if (!pc._usingBundle || sdpMLineIndex === 0) {
+              pc._gather(transceiver);
+              if (iceTransport.state === 'new') {
+                iceTransport.start(iceGatherer, remoteIceParameters,
+                  isIceLite ? 'controlling' : 'controlled');
+              }
+              if (dtlsTransport.state === 'new') {
+                dtlsTransport.start(remoteDtlsParameters);
+              }
+            }
+
+            // Calculate intersection of capabilities.
+            var params = getCommonCapabilities(localCapabilities,
+              remoteCapabilities);
+
+            // Start the RTCRtpSender. The RTCRtpReceiver for this
+            // transceiver has already been started in setRemoteDescription.
+            pc._transceive(transceiver,
+              params.codecs.length > 0,
+              false);
+          }
+        });
+      }
+
+      pc._localDescription = {
+        type: description.type,
+        sdp: description.sdp
+      };
+    }
     if (description.type === 'offer') {
       pc._updateSignalingState('have-local-offer');
     } else {
@@ -749,6 +774,11 @@ module.exports = function(window, edgeVersion) {
       return Promise.reject(util.makeError('InvalidStateError',
         'Can not set remote ' + description.type +
           ' in state ' + pc._signalingState));
+    }
+
+    // NOTE(syerrapragada): Mark all newly added tracks as negotiated
+    if (description.type === 'answer') {
+      pc._negotiationNeededTracks.splice(0, pc._negotiationNeededTracks.length);
     }
 
     // TODO: should be RTCError instead. But for that it would have to
