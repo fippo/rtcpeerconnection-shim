@@ -56,7 +56,6 @@ module.exports = function(window, edgeVersion) {
     // per-track iceGathers, iceTransports, dtlsTransports, rtpSenders, ...
     // everything that is needed to describe a SDP m-line.
     this._transceivers = [];
-    this._negotiationNeededTracks = [];
 
     this._sdpSessionId = SDPUtils.generateSessionId();
     this._sdpSessionVersion = 0;
@@ -544,8 +543,7 @@ module.exports = function(window, edgeVersion) {
     transceiver.track = track;
     transceiver.stream = stream;
     transceiver.rtpSender = new window.RTCRtpSender(track);
-
-    this._negotiationNeededTracks.push(track);
+    transceiver.isNegotiated = false;
 
     return transceiver.rtpSender;
   };
@@ -669,8 +667,8 @@ module.exports = function(window, edgeVersion) {
         if (!pc._localDescription) {
           transceiver.iceGatherer.onlocalcandidate = null;
         }
-        if (pc._negotiationNeededTracks.includes(transceiver.track)
-          && !transceiver.remoteCapabilities) {
+        if ('isNegotiated' in transceiver
+          && !!transceiver.isNegotiated === false) {
           transceiver.mid = null;
           delete transceiver.sdpMLineIndex;
           transceiver.sendEncodingParameters = null;
@@ -687,6 +685,7 @@ module.exports = function(window, edgeVersion) {
           var transceiver = pc._transceivers.find(function(t) {
             return t.mid === SDPUtils.getMid(mediaSection);
           });
+          transceiver.previousLocalCapabilities = transceiver.localCapabilities;
           transceiver.localCapabilities = caps;
         });
 
@@ -746,6 +745,7 @@ module.exports = function(window, edgeVersion) {
         });
       }
 
+      pc._previousLocalDescription = pc._localDescription;
       pc._localDescription = {
         type: description.type,
         sdp: description.sdp
@@ -774,11 +774,6 @@ module.exports = function(window, edgeVersion) {
       return Promise.reject(util.makeError('InvalidStateError',
         'Can not set remote ' + description.type +
           ' in state ' + pc._signalingState));
-    }
-
-    // NOTE(syerrapragada): Mark all newly added tracks as negotiated
-    if (description.type === 'answer') {
-      pc._negotiationNeededTracks.splice(0, pc._negotiationNeededTracks.length);
     }
 
     // TODO: should be RTCError instead. But for that it would have to
@@ -1107,6 +1102,11 @@ module.exports = function(window, edgeVersion) {
         } else {
           // FIXME: actually the receiver should be created later.
           delete transceiver.rtpReceiver;
+        }
+
+        // NOTE(syerrapragada): Mark negotiated
+        if (!!transceiver.isNegotiated === false) {
+          transceiver.isNegotiated = true;
         }
       }
     });
