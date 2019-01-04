@@ -88,5 +88,7 @@ function writeRejectedMediaSection(transceiver) {
   return sdp;
 }
 
-exports.writeMediaSection = writeMediaSection;
-exports.writeRejectedMediaSection = writeRejectedMediaSection;
+module.exports = {
+  writeMediaSection: writeMediaSection,
+  writeRejectedMediaSection: writeRejectedMediaSection
+};
