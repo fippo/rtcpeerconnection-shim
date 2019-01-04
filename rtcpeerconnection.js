@@ -406,7 +406,7 @@ module.exports = function(window, edgeVersion) {
       failed: 0
     };
     this._transceivers.forEach(function(transceiver) {
-      if (!transceiver.rejected) {
+      if (transceiver.iceTransport && !transceiver.rejected) {
         states[transceiver.iceTransport.state]++;
       }
     });
@@ -446,7 +446,8 @@ module.exports = function(window, edgeVersion) {
       failed: 0
     };
     this._transceivers.forEach(function(transceiver) {
-      if (!transceiver.rejected) {
+      if (transceiver.iceTransport && transceiver.dtlsTransport &&
+          !transceiver.rejected) {
         states[transceiver.iceTransport.state]++;
         states[transceiver.dtlsTransport.state]++;
       }
