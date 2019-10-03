@@ -875,7 +875,16 @@ module.exports = function(window, edgeVersion) {
           sessionpart);
         remoteDtlsParameters = SDPUtils.getDtlsParameters(mediaSection,
           sessionpart);
-        remoteDtlsParameters.role = 'client';
+        var dtlsRole;
+        if (SDPUtils.matchPrefix(mediaSection, 'a=setup:passive').length > 0) {
+          dtlsRole = 'server';
+        } else if (
+          SDPUtils.matchPrefix(mediaSection, 'a=setup:active').length > 0) {
+          dtlsRole = 'client';
+        } else {
+          dtlsRole = 'auto';
+        }
+        remoteDtlsParameters.role = dtlsRole;
       }
       recvEncodingParameters =
           SDPUtils.parseRtpEncodingParameters(mediaSection);
