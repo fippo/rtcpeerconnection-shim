@@ -764,7 +764,8 @@ module.exports = function(window, edgeVersion) {
 
     var sections = SDPUtils.splitSections(description.sdp);
     var sessionpart = sections.shift();
-
+    var isIceLite = SDPUtils.matchPrefix(sessionpart,
+      'a=ice-lite').length > 0;
     var usesMux = true;
     sections.forEach(function(mediaSection, sdpMLineIndex) {
       var kind = SDPUtils.getKind(mediaSection);
@@ -876,6 +877,8 @@ module.exports = function(window, edgeVersion) {
         remoteDtlsParameters = SDPUtils.getDtlsParameters(mediaSection,
           sessionpart);
         remoteDtlsParameters.role = 'client';
+        if (isIceLite) {
+          remoteDtlsParameters.role = 'server';}
       }
       recvEncodingParameters =
           SDPUtils.parseRtpEncodingParameters(mediaSection);
