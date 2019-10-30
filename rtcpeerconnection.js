@@ -878,7 +878,8 @@ module.exports = function(window, edgeVersion) {
           sessionpart);
         remoteDtlsParameters.role = 'client';
         if (isIceLite) {
-          remoteDtlsParameters.role = 'server';}
+          remoteDtlsParameters.role = 'server';
+        }
       }
       recvEncodingParameters =
           SDPUtils.parseRtpEncodingParameters(mediaSection);
